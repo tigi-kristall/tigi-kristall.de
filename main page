@@ -28,7 +28,7 @@
 <body>
 
     <h1>Minecraft Server Access Request</h1>
-    <img src="your-minecraft-image.jpg" alt="Minecraft Bild" style="max-width: 100%; height: auto;">
+    <img src="minecraft-2053886_1920.png" alt="Minecraft Bild" style="max-width: 100%; height: auto;">
     <br><br>
     <button id="request-button">Request Server Access</button>
     
