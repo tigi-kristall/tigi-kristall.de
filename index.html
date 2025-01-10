@@ -54,6 +54,12 @@
             border: none;
             border-radius: 5px;
         }
+        #success-message {
+            display: none;
+            margin-top: 20px;
+            color: green;
+            font-size: 18px;
+        }
     </style>
 </head>
 <body>
@@ -62,26 +68,11 @@
     <button id="request-button">Request Server Access</button>
     
     <div id="access-form">
-        <form id="accessForm" action="https://formspree.io/f/mannanba" method="POST">
+        <form id="accessForm">
             <input id="username" type="text" name="username" placeholder="your name" required><br>
             <input id="gamertag" type="text" name="gamertag" placeholder="your gamertag" required><br>
             <button type="submit" id="send-button">Send</button>
         </form>
     </div>
 
-    <script>
-        // Zeigt das Formular an, wenn der Button geklickt wird
-        document.getElementById('request-button').onclick = function() {
-            document.getElementById('access-form').style.display = 'block';
-        };
-
-        // Leert die Felder nach dem erfolgreichen Senden
-        document.getElementById('accessForm').onsubmit = function(event) {
-            setTimeout(() => {
-                document.getElementById('username').value = '';
-                document.getElementById('gamertag').value = '';
-            }, 100); // Felder nach kurzem Timeout leeren
-        };
-    </script>
-</body>
-</html>
+    <p id="success-message">Your request has been sent succ
