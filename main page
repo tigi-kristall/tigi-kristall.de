@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Request Server Access</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        #access-form {
+            display: none;
+            margin-top: 20px;
+        }
+        input[type="text"] {
+            padding: 10px;
+            margin: 10px;
+            width: 250px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Minecraft Server Access Request</h1>
+    <img src="your-minecraft-image.jpg" alt="Minecraft Bild" style="max-width: 100%; height: auto;">
+    <br><br>
+    <button id="request-button">Request Server Access</button>
+    
+    <div id="access-form">
+        <form action="https://formspree.io/f/{your_formspree_id}" method="POST">
+            <input type="text" name="username" placeholder="Dein Name" required><br>
+            <input type="text" name="gamertag" placeholder="Gamer-Tag" required><br>
+            <button type="submit" id="send-button" disabled>Send</button>
+        </form>
+    </div>
+
+    <script>
+        document.getElementById('request-button').onclick = function() {
+            document.getElementById('access-form').style.display = 'block';
+        };
+
+        document.getElementById('username').oninput = checkForm;
+        document.getElementById('gamertag').oninput = checkForm;
+
+        function checkForm() {
+            const username = document.getElementById('username').value;
+            const gamertag = document.getElementById('gamertag').value;
+            document.getElementById('send-button').disabled = !(username && gamertag);
+        }
+    </script>
+
+</body>
+</html>
