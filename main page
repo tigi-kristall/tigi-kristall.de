@@ -33,7 +33,7 @@
     <button id="request-button">Request Server Access</button>
     
     <div id="access-form">
-        <form action="https://formspree.io/f/{your_formspree_id}" method="POST">
+        <form action="https://formspree.io/f/{mannanba}" method="POST">
             <input type="text" name="username" placeholder="Dein Name" required><br>
             <input type="text" name="gamertag" placeholder="Gamer-Tag" required><br>
             <button type="submit" id="send-button" disabled>Send</button>
