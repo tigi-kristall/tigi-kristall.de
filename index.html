@@ -20,12 +20,22 @@
             z-index: -1;
             object-fit: cover;
         }
-        #request-button, #access-form {
+        #content-container {
             position: relative;
             z-index: 1;
+            margin-top: 100px;
+        }
+        #access-description {
+            font-size: 24px;
+            color: white;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 5px black;
+        }
+        #request-button, #access-form {
+            position: relative;
+            margin-top: 20px;
         }
         #request-button {
-            margin-top: 20px;
             padding: 10px 20px;
             font-size: 16px;
             cursor: pointer;
@@ -65,17 +75,20 @@
 <body>
     <img id="background-image" src="minecraft-2053886_1920.png" alt="Minecraft Bild">
     
-    <button id="request-button">Request Server Access to mine.tigi-kristall.de</button>
-    
-    <div id="access-form">
-        <form id="accessForm">
-            <input id="username" type="text" name="username" placeholder="your name" required><br>
-            <input id="gamertag" type="text" name="gamertag" placeholder="your gamertag" required><br>
-            <button type="submit" id="send-button">Send</button>
-        </form>
-    </div>
+    <div id="content-container">
+        <p id="access-description">to get access to the mine.tigi-kristall.de server</p>
+        <button id="request-button">Request Server Access</button>
+        
+        <div id="access-form">
+            <form id="accessForm">
+                <input id="username" type="text" name="username" placeholder="your name" required><br>
+                <input id="gamertag" type="text" name="gamertag" placeholder="your gamertag" required><br>
+                <button type="submit" id="send-button">Send</button>
+            </form>
+        </div>
 
-    <p id="success-message">Your request has been sent successfully!</p>
+        <p id="success-message">Your request has been sent successfully!</p>
+    </div>
 
     <script>
         document.getElementById('request-button').onclick = function() {
@@ -85,15 +98,30 @@
         document.getElementById('accessForm').onsubmit = async function(event) {
             event.preventDefault(); // Verhindert die Standardweiterleitung
             
-            // Daten aus dem Formular sammeln
-            const formData = new FormData(event.target);
+            const username = document.getElementById('username').value;
+            const gamertag = document.getElementById('gamertag').value;
+
+            // Prüfen, ob die Felder ausgefüllt sind
+            if (!username || !gamertag) {
+                alert("Please fill out all fields.");
+                return;
+            }
+
+            // Daten vorbereiten
+            const formData = {
+                username: username,
+                gamertag: gamertag
+            };
 
             try {
-                // Senden der Daten an Formspree
+                // AJAX-Request an Formspree
                 const response = await fetch('https://formspree.io/f/mannanba', {
                     method: 'POST',
-                    headers: { 'Accept': 'application/json' },
-                    body: formData
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
                 });
 
                 if (response.ok) {
@@ -109,10 +137,10 @@
                         document.getElementById('success-message').style.display = 'none';
                     }, 5000);
                 } else {
-                    alert('An error occurred. Please try again.');
+                    alert("An error occurred. Please try again.");
                 }
             } catch (error) {
-                alert('An error occurred. Please check your internet connection and try again.');
+                alert("An error occurred. Please check your internet connection and try again.");
             }
         };
     </script>
