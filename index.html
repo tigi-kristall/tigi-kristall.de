@@ -1,13 +1,38 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Request Server Access</title>
+    <title>Minecraft Server Access</title>
     <style>
         body {
+            margin: 0;
             font-family: Arial, sans-serif;
             text-align: center;
+            overflow: hidden;
+        }
+        #background-image {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            object-fit: cover;
+        }
+        #request-button, #access-form {
+            position: relative;
+            z-index: 1;
+        }
+        #request-button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
         }
         #access-form {
             display: none;
@@ -17,43 +42,44 @@
             padding: 10px;
             margin: 10px;
             width: 250px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
         }
-        button {
+        button[type="submit"] {
             padding: 10px 20px;
             font-size: 16px;
             cursor: pointer;
+            background-color: #008CBA;
+            color: white;
+            border: none;
+            border-radius: 5px;
         }
     </style>
 </head>
 <body>
-
-    <h1>Minecraft Server Access Request</h1>
-    <img src="minecraft-2053886_1920.png" alt="Minecraft Bild" style="max-width: 100%; height: auto;">
-    <br><br>
+    <img id="background-image" src="minecraft-2053886_1920.png" alt="Minecraft Bild">
+    
     <button id="request-button">Request Server Access</button>
     
     <div id="access-form">
-        <form action="https://formspree.io/f/mannanba" method="POST">
-            <input type="text" name="username" placeholder="Dein Name" id="username" required><br>
-            <input type="text" name="gamertag" placeholder="Gamer-Tag" id="gamertag" required><br>
-            <button type="submit" id="send-button" disabled>Send</button>
+        <form action="https://formspree.io/f/mannanba" method="POST" onsubmit="clearForm()">
+            <input id="username" type="text" name="username" placeholder="your name" required><br>
+            <input id="gamertag" type="text" name="gamertag" placeholder="your gamertag" required><br>
+            <button type="submit" id="send-button">Send</button>
         </form>
     </div>
 
     <script>
+        // Zeigt das Formular an, wenn der Button geklickt wird
         document.getElementById('request-button').onclick = function() {
             document.getElementById('access-form').style.display = 'block';
         };
 
-        document.getElementById('username').oninput = checkForm;
-        document.getElementById('gamertag').oninput = checkForm;
-
-        function checkForm() {
-            const username = document.getElementById('username').value;
-            const gamertag = document.getElementById('gamertag').value;
-            document.getElementById('send-button').disabled = !(username && gamertag);
+        // Leert die Felder nach dem Senden
+        function clearForm() {
+            document.getElementById('username').value = '';
+            document.getElementById('gamertag').value = '';
         }
     </script>
-
 </body>
 </html>
