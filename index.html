@@ -62,7 +62,7 @@
     <button id="request-button">Request Server Access</button>
     
     <div id="access-form">
-        <form action="https://formspree.io/f/mannanba" method="POST" onsubmit="clearForm()">
+        <form id="accessForm" action="https://formspree.io/f/mannanba" method="POST">
             <input id="username" type="text" name="username" placeholder="your name" required><br>
             <input id="gamertag" type="text" name="gamertag" placeholder="your gamertag" required><br>
             <button type="submit" id="send-button">Send</button>
@@ -75,11 +75,13 @@
             document.getElementById('access-form').style.display = 'block';
         };
 
-        // Leert die Felder nach dem Senden
-        function clearForm() {
-            document.getElementById('username').value = '';
-            document.getElementById('gamertag').value = '';
-        }
+        // Leert die Felder nach dem erfolgreichen Senden
+        document.getElementById('accessForm').onsubmit = function(event) {
+            setTimeout(() => {
+                document.getElementById('username').value = '';
+                document.getElementById('gamertag').value = '';
+            }, 100); // Felder nach kurzem Timeout leeren
+        };
     </script>
 </body>
 </html>
