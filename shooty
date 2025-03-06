@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>2D Cartoon Battle Royale in Three.js</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #endScreen, #nextRoundScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        #endScreen button, #nextRoundScreen button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #scoreDisplay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 20px;
+            text-shadow: 1px 1px 2px black;
+        }
+        #weaponDisplay {
+            position: absolute;
+            top: 40px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            text-shadow: 1px 1px 2px black;
+        }
+        #highscoreList {
+            margin-top: 20px;
+        }
+        #highscoreList table {
+            width: 200px;
+            text-align: left;
+            border-collapse: collapse;
+        }
+        #highscoreList th, #highscoreList td {
+            padding: 5px;
+        }
+        #nameInput {
+            margin-top: 10px;
+            padding: 5px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Three.js über CDN laden -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r132/three.min.js"></script>
+    <!-- Score- und Waffenanzeige sowie Bildschirme -->
+    <div id="scoreDisplay">Score: 0</div>
+    <div id="weaponDisplay">Waffe: Pistole</div>
+    <div id="endScreen">
+        <h1>Du hast verloren!</h1>
+        <h2>Dein Score: <span id="finalScore"></span></h2>
+        <input type="text" id="nameInput" placeholder="Dein Name" maxlength="10">
+        <button onclick="submitScore()">Score speichern</button>
+        <div id="highscoreList"></div>
+        <button onclick="restartGame()">Neustart</button>
+    </div>
+    <div id="nextRoundScreen">
+        <h1>Du hast gewonnen!</h1>
+        <h2>Aktueller Score: <span id="currentScore"></span></h2>
+        <button onclick="nextRound()">Next Round</button>
+    </div>
+    <script>
+        // Globale Variablen
+        let scene, camera, renderer;
+        let player, npc, projectiles = [], npcProjectiles = [], obstacles = [], healingItems = [];
+        let moveDirection = { left: false, right: false, up: false, down: false };
+        let pickupKeyPressed = false;
+        let playerShootTimer = 0;
+        let isShooting = false;
+        let mouseX = 0, mouseY = 0; // Mausposition für Minigun
+        const mapSize = 2000;
+        let npcMoveTimer = 0;
+        let npcShootTimer = 0;
+        let gameActive = true;
+        let score = 0;
+        let round = 1; // Rundenanzahl für NPC-Stärke
+
+        // Waffensystem
+        const weapons = {
+            pistol: { name: "Pistole", cooldown: 1.5, damage: 20, projectiles: 1, color: 0xff0000, continuous: false },
+            rapid: { name: "Schnellfeuer", cooldown: 0.5, damage: 10, projectiles: 1, color: 0x0000ff, continuous: false },
+            shotgun: { name: "Schrotflinte", cooldown: 2.0, damage: 30, projectiles: 3, color: 0xffa500, continuous: false },
+            minigun: { name: "Minigun", cooldown: 0.1, damage: 5, projectiles: 1, color: 0x800080, continuous: true }
+        };
+        let currentWeapon = 'pistol';
+
+        // Highscore aus localStorage laden oder initialisieren
+        let highscores = JSON.parse(localStorage.getItem('highscores')) || [];
+        highscores = highscores.filter(entry => 
+            entry && typeof entry === 'object' && entry.name && entry.score !== undefined
+        );
+        localStorage.setItem('highscores', JSON.stringify(highscores));
+
+        // Initialisierung
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87ceeb);
+
+            camera = new THREE.OrthographicCamera(
+                window.innerWidth / -2,
+                window.innerWidth / 2,
+                window.innerHeight / 2,
+                window.innerHeight / -2,
+                1,
+                1000
+            );
+            camera.position.set(0, 0, 10);
+
+            renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            createMap();
+            spawnPlayer();
+            spawnNPC();
+            spawnHealingItems();
+
+            window.addEventListener('keydown', onKeyDown);
+            window.addEventListener('keyup', onKeyUp);
+            window.addEventListener('mousedown', onMouseDown);
+            window.addEventListener('mouseup', onMouseUp);
+            window.addEventListener('mousemove', onMouseMove); // Mausposition aktualisieren
+            window.addEventListener('resize', onWindowResize);
+
+            updateScoreDisplay();
+            updateWeaponDisplay();
+            displayHighscore();
+            animate();
+        }
+
+        // Karte erstellen (Boden, Hindernisse)
+        function createMap() {
+            const groundGeometry = new THREE.PlaneGeometry(mapSize, mapSize);
+            const groundMaterial = new THREE.MeshBasicMaterial({ color: 0x228b22 });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            scene.add(ground);
+
+            for (let i = 0; i < 24; i++) {
+                const obstacle = createObstacle();
+                obstacle.position.set(
+                    (Math.random() - 0.5) * mapSize,
+                    (Math.random() - 0.5) * mapSize,
+                    0
+                );
+                obstacles.push(obstacle);
+                scene.add(obstacle);
+            }
+        }
+
+        // Spieler erstellen
+        function spawnPlayer() {
+            const geometry = new THREE.PlaneGeometry(50, 50);
+            const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide });
+            player = new THREE.Mesh(geometry, material);
+            player.position.set(0, 0, 0);
+            player.userData = { health: 100, alive: true };
+
+            const healthBarGeometry = new THREE.PlaneGeometry(50, 5);
+            const healthBarMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+            player.healthBar = new THREE.Mesh(healthBarGeometry, healthBarMaterial);
+            player.healthBar.position.set(0, 35, 0);
+            player.add(player.healthBar);
+
+            scene.add(player);
+        }
+
+        // NPC-Gegner erstellen
+        function spawnNPC() {
+            const geometry = new THREE.PlaneGeometry(50, 50);
+            const material = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide });
+            npc = new THREE.Mesh(geometry, material);
+            
+            let validPosition = false;
+            let x, y;
+            while (!validPosition) {
+                x = (Math.random() - 0.5) * mapSize;
+                y = (Math.random() - 0.5) * mapSize;
+                if (!checkCollision(x, y, 25) && Math.hypot(x - player.position.x, y - player.position.y) > 100) {
+                    validPosition = true;
+                }
+            }
+            npc.position.set(x, y, 0);
+            npc.userData = { health: 100, alive: true, shootCooldown: 1.5 - (round - 1) * 0.1 }; // Feuerrate steigt pro Runde
+
+            const healthBarGeometry = new THREE.PlaneGeometry(50, 5);
+            const healthBarMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+            npc.healthBar = new THREE.Mesh(healthBarGeometry, healthBarMaterial);
+            npc.healthBar.position.set(0, 35, 0);
+            npc.add(npc.healthBar);
+
+            scene.add(npc);
+        }
+
+        // Heilungsgegenstände erstellen (weißes Quadrat mit rotem Kreuz)
+        function spawnHealingItems() {
+            for (let i = 0; i < 6; i++) {
+                const group = new THREE.Group();
+
+                const squareGeometry = new THREE.PlaneGeometry(20, 20);
+                const squareMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                const square = new THREE.Mesh(squareGeometry, squareMaterial);
+
+                const crossGeometry = new THREE.PlaneGeometry(10, 10);
+                const crossMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+                const cross = new THREE.Mesh(crossGeometry, crossMaterial);
+
+                group.add(square);
+                group.add(cross);
+
+                let validPosition = false;
+                let x, y;
+                while (!validPosition) {
+                    x = (Math.random() - 0.5) * mapSize;
+                    y = (Math.random() - 0.5) * mapSize;
+                    if (!checkCollision(x, y, 10)) {
+                        validPosition = true;
+                    }
+                }
+                group.position.set(x, y, 0);
+                healingItems.push(group);
+                scene.add(group);
+            }
+        }
+
+        // Hindernis erstellen
+        function createObstacle() {
+            const geometry = new THREE.PlaneGeometry(40, 40);
+            const material = new THREE.MeshBasicMaterial({ color: 0x8b4513 });
+            return new THREE.Mesh(geometry, material);
+        }
+
+        // Projektil erstellen (für Spieler, abhängig von Waffe)
+        function createProjectile(targetX, targetY) {
+            const weapon = weapons[currentWeapon];
+            const projs = [];
+            for (let i = 0; i < weapon.projectiles; i++) {
+                const geometry = new THREE.PlaneGeometry(10, 10);
+                const material = new THREE.MeshBasicMaterial({ color: weapon.color });
+                const projectile = new THREE.Mesh(geometry, material);
+                projectile.position.copy(player.position);
+                let direction = new THREE.Vector2(targetX - player.position.x, targetY - player.position.y).normalize();
+                if (weapon.projectiles > 1) {
+                    const angleOffset = (i - (weapon.projectiles - 1) / 2) * (Math.PI / 12); // 15° Abstand
+                    direction = direction.clone().rotateAround(new THREE.Vector2(0, 0), angleOffset);
+                }
+                projectile.userData = { velocity: direction.multiplyScalar(10), damage: weapon.damage, owner: 'player' };
+                projs.push(projectile);
+            }
+            return projs;
+        }
+
+        // Projektil erstellen (für NPC, mit Doppel-Schuss-Option)
+        function createNPCProjectile(doubleShot = false) {
+            const geometry = new THREE.PlaneGeometry(10, 10);
+            const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+            const projectile = new THREE.Mesh(geometry, material);
+            projectile.position.copy(npc.position);
+            const direction = new THREE.Vector2(player.position.x - npc.position.x, player.position.y - npc.position.y).normalize();
+            projectile.userData = { velocity: direction.multiplyScalar(7), damage: 20, owner: 'npc' };
+            if (doubleShot) {
+                const offset = direction.clone().rotateAround(new THREE.Vector2(0, 0), Math.PI / 6);
+                const projectile2 = new THREE.Mesh(geometry, material);
+                projectile2.position.copy(npc.position);
+                projectile2.userData = { velocity: offset.multiplyScalar(7), damage: 20, owner: 'npc' };
+                return [projectile, projectile2];
+            }
+            return [projectile];
+        }
+
+        // Kollisionsprüfung mit Hindernissen
+        function checkCollision(x, y, radius) {
+            for (const obstacle of obstacles) {
+                const dx = x - obstacle.position.x;
+                const dy = y - obstacle.position.y;
+                const distance = Math.hypot(dx, dy);
+                if (distance < radius + 20) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Gesundheitsbalken aktualisieren
+        function updateHealthBar(entity) {
+            const health = entity.userData.health;
+            const barWidth = 50 * (health / 100);
+            entity.healthBar.geometry.dispose();
+            entity.healthBar.geometry = new THREE.PlaneGeometry(barWidth, 5);
+
+            let color;
+            if (health > 80) color = 0x00ff00; // Grün
+            else if (health > 60) color = 0xffff00; // Gelb
+            else if (health > 40) color = 0xffa500; // Orange
+            else if (health > 20) color = 0xff4500; // Dunkelorange
+            else color = 0xff0000; // Rot
+            entity.healthBar.material.color.setHex(color);
+        }
+
+        // Punkte aktualisieren und anzeigen
+        function updateScore(points) {
+            score += points;
+            updateScoreDisplay();
+        }
+
+        function updateScoreDisplay() {
+            document.getElementById('scoreDisplay').textContent = `Score: ${score}`;
+        }
+
+        // Waffe anzeigen
+        function updateWeaponDisplay() {
+            document.getElementById('weaponDisplay').textContent = `Waffe: ${weapons[currentWeapon].name}`;
+        }
+
+        // Highscore aktualisieren mit Name
+        function updateHighscore(name) {
+            const entry = { name: name || "Anonym", score: score };
+            highscores.push(entry);
+            highscores.sort((a, b) => b.score - a.score);
+            highscores = highscores.slice(0, 5);
+            localStorage.setItem('highscores', JSON.stringify(highscores));
+            displayHighscore();
+        }
+
+        function displayHighscore() {
+            const highscoreList = document.getElementById('highscoreList');
+            highscoreList.innerHTML = '<h3>Highscores</h3><table>' +
+                '<tr><th>Nr.</th><th>Name</th><th>Score</th></tr>' +
+                highscores.map((entry, i) => `<tr><td>${i + 1}.</td><td>${entry.name}</td><td>${entry.score}</td></tr>`).join('') +
+                '</table>';
+        }
+
+        function submitScore() {
+            const name = document.getElementById('nameInput').value.trim();
+            updateHighscore(name);
+            document.getElementById('nameInput').style.display = 'none';
+            document.querySelector('#endScreen button:nth-child(4)').style.display = 'none';
+        }
+
+        // Bewegung, Heilung und Waffenwechsel (Tasteneingaben)
+        function onKeyDown(event) {
+            if (!gameActive) return;
+            switch (event.key.toLowerCase()) {
+                case 'a': moveDirection.left = true; break;
+                case 'd': moveDirection.right = true; break;
+                case 'w': moveDirection.up = true; break;
+                case 's': moveDirection.down = true; break;
+                case 'e': pickupKeyPressed = true; break;
+                case '1': currentWeapon = 'pistol'; updateWeaponDisplay(); break;
+                case '2': currentWeapon = 'rapid'; updateWeaponDisplay(); break;
+                case '3': currentWeapon = 'shotgun'; updateWeaponDisplay(); break;
+                case '4': currentWeapon = 'minigun'; updateWeaponDisplay(); break;
+            }
+        }
+
+        function onKeyUp(event) {
+            if (!gameActive) return;
+            switch (event.key.toLowerCase()) {
+                case 'a': moveDirection.left = false; break;
+                case 'd': moveDirection.right = false; break;
+                case 'w': moveDirection.up = false; break;
+                case 's': moveDirection.down = false; break;
+                case 'e': pickupKeyPressed = false; break;
+            }
+        }
+
+        // Mausposition aktualisieren
+        function onMouseMove(event) {
+            mouseX = event.clientX;
+            mouseY = event.clientY;
+        }
+
+        // Schießen starten (Maus gedrückt)
+        function onMouseDown(event) {
+            if (!gameActive) return;
+            isShooting = true;
+            mouseX = event.clientX;
+            mouseY = event.clientY;
+            shoot();
+        }
+
+        // Schießen stoppen (Maus losgelassen)
+        function onMouseUp() {
+            isShooting = false;
+        }
+
+        // Schusslogik
+        function shoot() {
+            if (!isShooting || playerShootTimer > 0) return;
+            const weapon = weapons[currentWeapon];
+            const mouse = new THREE.Vector2(
+                (mouseX / window.innerWidth) * 2 - 1,
+                -(mouseY / window.innerHeight) * 2 + 1
+            );
+            const target = mouse.clone();
+            target.x *= window.innerWidth / 2;
+            target.y *= window.innerHeight / 2;
+            target.add(new THREE.Vector2(player.position.x, player.position.y));
+            const projs = createProjectile(target.x, target.y);
+            projs.forEach(proj => {
+                projectiles.push(proj);
+                scene.add(proj);
+            });
+            playerShootTimer = weapon.cooldown;
+            if (!weapon.continuous) isShooting = false; // Nur Minigun schießt weiter
+        }
+
+        // Fenstergröße anpassen
+        function onWindowResize() {
+            camera.left = window.innerWidth / -2;
+            camera.right = window.innerWidth / 2;
+            camera.top = window.innerHeight / 2;
+            camera.bottom = window.innerHeight / -2;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Spiel beenden (nur bei Verlust)
+        function endGame(winner) {
+            gameActive = false;
+            isShooting = false;
+            if (winner === 'player') {
+                document.getElementById('currentScore').textContent = score;
+                document.getElementById('nextRoundScreen').style.display = 'flex';
+            } else {
+                const endScreen = document.getElementById('endScreen');
+                const finalScore = document.getElementById('finalScore');
+                finalScore.textContent = score;
+                endScreen.style.display = 'flex';
+                document.getElementById('nameInput').value = '';
+                document.getElementById('nameInput').style.display = 'block';
+                document.querySelector('#endScreen button:nth-child(4)').style.display = 'block';
+            }
+        }
+
+        // Nächste Runde starten
+        function nextRound() {
+            document.getElementById('nextRoundScreen').style.display = 'none';
+            gameActive = true;
+            round++; // Runde erhöhen
+
+            scene.remove(npc);
+            healingItems.forEach(item => scene.remove(item));
+            healingItems = [];
+            projectiles.forEach(proj => scene.remove(proj));
+            npcProjectiles.forEach(proj => scene.remove(proj));
+            projectiles = [];
+            npcProjectiles = [];
+
+            spawnNPC();
+            spawnHealingItems();
+            player.userData.health = 100;
+            updateHealthBar(player);
+            npcMoveTimer = 0;
+            npcShootTimer = 0;
+            playerShootTimer = 0;
+            moveDirection = { left: false, right: false, up: false, down: false };
+            pickupKeyPressed = false;
+        }
+
+        // Spiel neu starten
+        function restartGame() {
+            gameActive = true;
+            document.getElementById('endScreen').style.display = 'none';
+
+            scene.remove(player);
+            scene.remove(npc);
+            healingItems.forEach(item => scene.remove(item));
+            healingItems = [];
+            obstacles.forEach(obst => scene.remove(obst));
+            obstacles = [];
+
+            createMap();
+            spawnPlayer();
+            spawnNPC();
+            spawnHealingItems();
+
+            projectiles.forEach(proj => scene.remove(proj));
+            npcProjectiles.forEach(proj => scene.remove(proj));
+            projectiles = [];
+            npcProjectiles = [];
+
+            npcMoveTimer = 0;
+            npcShootTimer = 0;
+            playerShootTimer = 0;
+            score = 0;
+            round = 1; // Runden zurücksetzen
+            currentWeapon = 'pistol';
+            updateWeaponDisplay();
+            updateScoreDisplay();
+            moveDirection = { left: false, right: false, up: false, down: false };
+            pickupKeyPressed = false;
+            isShooting = false;
+        }
+
+        // Spiel-Schleife
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (!gameActive) return;
+
+            if (playerShootTimer > 0) {
+                playerShootTimer -= 1 / 60;
+            }
+
+            // Anhaltendes Schießen für Minigun
+            if (isShooting) {
+                shoot();
+            }
+
+            // Spieler bewegen
+            const speed = 5;
+            let newX = player.position.x;
+            let newY = player.position.y;
+            if (moveDirection.left) newX -= speed;
+            if (moveDirection.right) newX += speed;
+            if (moveDirection.up) newY += speed;
+            if (moveDirection.down) newY -= speed;
+
+            if (!checkCollision(newX, newY, 25)) {
+                player.position.x = newX;
+                player.position.y = newY;
+            }
+
+            // Spieler verliert, wenn er von der Karte fällt
+            if (Math.abs(player.position.x) > mapSize / 2 || Math.abs(player.position.y) > mapSize / 2) {
+                player.userData.alive = false;
+                scene.remove(player);
+                endGame('npc');
+                return;
+            }
+
+            // Spieler Heilungsgegenstände aufheben (mit "E")
+            if (pickupKeyPressed) {
+                healingItems.forEach((item, index) => {
+                    if (Math.hypot(player.position.x - item.position.x, player.position.y - item.position.y) < 35) {
+                        player.userData.health = Math.min(100, player.userData.health + 25);
+                        updateHealthBar(player);
+                        scene.remove(item);
+                        healingItems.splice(index, 1);
+                    }
+                });
+            }
+
+            // NPC bewegen (gezielte Heilung bei <80% oder Verfolgung des Spielers)
+            npcMoveTimer += 1 / 60;
+            if (npc.userData.alive) {
+                const distanceToPlayer = Math.hypot(npc.position.x - player.position.x, npc.position.y - player.position.y);
+                if (npc.userData.health < 80 && healingItems.length > 0) {
+                    let closestItem = healingItems[0];
+                    let minDistance = Math.hypot(npc.position.x - closestItem.position.x, npc.position.y - closestItem.position.y);
+                    for (let i = 1; i < healingItems.length; i++) {
+                        const distance = Math.hypot(npc.position.x - healingItems[i].position.x, npc.position.y - healingItems[i].position.y);
+                        if (distance < minDistance) {
+                            closestItem = healingItems[i];
+                            minDistance = distance;
+                        }
+                    }
+                    let direction = new THREE.Vector2(
+                        closestItem.position.x - npc.position.x,
+                        closestItem.position.y - npc.position.y
+                    ).normalize();
+                    newX = npc.position.x + direction.x * 4;
+                    newY = npc.position.y + direction.y * 4;
+
+                    // Hindernisumgehung
+                    if (checkCollision(newX, newY, 25)) {
+                        const leftDir = direction.clone().rotateAround(new THREE.Vector2(0, 0), Math.PI / 4);
+                        const rightDir = direction.clone().rotateAround(new THREE.Vector2(0, 0), -Math.PI / 4);
+                        const leftX = npc.position.x + leftDir.x * 4;
+                        const leftY = npc.position.y + leftDir.y * 4;
+                        const rightX = npc.position.x + rightDir.x * 4;
+                        const rightY = npc.position.y + rightDir.y * 4;
+
+                        if (!checkCollision(leftX, leftY, 25)) {
+                            direction = leftDir;
+                        } else if (!checkCollision(rightX, rightY, 25)) {
+                            direction = rightDir;
+                        } else {
+                            direction = new THREE.Vector2(0, 0);
+                        }
+                    }
+                    npc.userData.velocity = direction.multiplyScalar(4);
+                } else if (distanceToPlayer < 300) {
+                    let direction = new THREE.Vector2(
+                        player.position.x - npc.position.x,
+                        player.position.y - npc.position.y
+                    ).normalize();
+                    newX = npc.position.x + direction.x * 3.5;
+                    newY = npc.position.y + direction.y * 3.5;
+
+                    // Hindernisumgehung bei Verfolgung
+                    if (checkCollision(newX, newY, 25)) {
+                        const leftDir = direction.clone().rotateAround(new THREE.Vector2(0, 0), Math.PI / 4);
+                        const rightDir = direction.clone().rotateAround(new THREE.Vector2(0, 0), -Math.PI / 4);
+                        const leftX = npc.position.x + leftDir.x * 3.5;
+                        const leftY = npc.position.y + leftDir.y * 3.5;
+                        const rightX = npc.position.x + rightDir.x * 3.5;
+                        const rightY = npc.position.y + rightDir.y * 3.5;
+
+                        if (!checkCollision(leftX, leftY, 25)) {
+                            direction = leftDir;
+                        } else if (!checkCollision(rightX, rightY, 25)) {
+                            direction = rightDir;
+                        } else {
+                            direction = new THREE.Vector2(0, 0);
+                        }
+                    }
+                    npc.userData.velocity = direction.multiplyScalar(3.5);
+                } else if (npcMoveTimer > 2) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const direction = new THREE.Vector2(Math.cos(angle), Math.sin(angle));
+                    npc.userData.velocity = direction.multiplyScalar(3);
+                    npcMoveTimer = 0;
+                }
+
+                if (npc.userData.velocity) {
+                    newX = npc.position.x + npc.userData.velocity.x;
+                    newY = npc.position.y + npc.userData.velocity.y;
+                    if (!checkCollision(newX, newY, 25)) {
+                        npc.position.x = newX;
+                        npc.position.y = newY;
+                    }
+                    npc.position.clamp(
+                        new THREE.Vector3(-mapSize / 2, -mapSize / 2, 0),
+                        new THREE.Vector3(mapSize / 2, mapSize / 2, 0)
+                    );
+                }
+            }
+
+            // NPC Heilungsgegenstände aufsammeln
+            healingItems.forEach((item, index) => {
+                if (npc.userData.alive && Math.hypot(npc.position.x - item.position.x, npc.position.y - item.position.y) < 35) {
+                    npc.userData.health = Math.min(100, npc.userData.health + 25);
+                    updateHealthBar(npc);
+                    scene.remove(item);
+                    healingItems.splice(index, 1);
+                }
+            });
+
+            // NPC schießen (Feuerrate steigt pro Runde)
+            npcShootTimer += 1 / 60;
+            if (npcShootTimer > npc.userData.shootCooldown && npc.userData.alive) {
+                const doubleShot = Math.random() < 0.3;
+                const shots = createNPCProjectile(doubleShot);
+                shots.forEach(shot => {
+                    npcProjectiles.push(shot);
+                    scene.add(shot);
+                });
+                npcShootTimer = 0;
+            }
+
+            // Spieler-Projektile bewegen und Kollision prüfen
+            projectiles.forEach((proj, index) => {
+                proj.position.x += proj.userData.velocity.x;
+                proj.position.y += proj.userData.velocity.y;
+
+                if (checkCollision(proj.position.x, proj.position.y, 5)) {
+                    scene.remove(proj);
+                    projectiles.splice(index, 1);
+                    return;
+                }
+
+                if (npc.userData.alive && Math.hypot(proj.position.x - npc.position.x, proj.position.y - npc.position.y) < 35) {
+                    npc.userData.health -= proj.userData.damage;
+                    updateHealthBar(npc);
+                    updateScore(10);
+                    scene.remove(proj);
+                    projectiles.splice(index, 1);
+                    if (npc.userData.health <= 0) {
+                        npc.userData.alive = false;
+                        scene.remove(npc);
+                        updateScore(50);
+                        endGame('player');
+                    }
+                    return;
+                }
+
+                if (Math.abs(proj.position.x) > mapSize / 2 || Math.abs(proj.position.y) > mapSize / 2) {
+                    scene.remove(proj);
+                    projectiles.splice(index, 1);
+                }
+            });
+
+            // NPC-Projektile bewegen und Kollision prüfen
+            npcProjectiles.forEach((proj, index) => {
+                proj.position.x += proj.userData.velocity.x;
+                proj.position.y += proj.userData.velocity.y;
+
+                if (checkCollision(proj.position.x, proj.position.y, 5)) {
+                    scene.remove(proj);
+                    npcProjectiles.splice(index, 1);
+                    return;
+                }
+
+                if (player.userData.alive && Math.hypot(proj.position.x - player.position.x, proj.position.y - player.position.y) < 35) {
+                    player.userData.health -= proj.userData.damage;
+                    updateHealthBar(player);
+                    scene.remove(proj);
+                    npcProjectiles.splice(index, 1);
+                    if (player.userData.health <= 0) {
+                        player.userData.alive = false;
+                        scene.remove(player);
+                        endGame('npc');
+                    }
+                    return;
+                }
+
+                if (Math.abs(proj.position.x) > mapSize / 2 || Math.abs(proj.position.y) > mapSize / 2) {
+                    scene.remove(proj);
+                    npcProjectiles.splice(index, 1);
+                }
+            });
+
+            // Kamera folgt Spieler
+            camera.position.x = player.position.x;
+            camera.position.y = player.position.y;
+
+            // Szene rendern
+            renderer.render(scene, camera);
+        }
+
+        // Spiel starten
+        init();
+    </script>
+</body>
+</html>
